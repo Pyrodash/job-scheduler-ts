@@ -10,6 +10,7 @@ import {
     JobContext,
 } from './queue.queue'
 import { JobDetails } from '../types'
+import { Repository } from 'repository/repository.repository'
 
 interface JobPayload<Params> {
     id: string
@@ -62,6 +63,12 @@ export class PulsarProducer implements Producer {
 export class PulsarConsumer implements Consumer {
     constructor(private consumer: Pulsar.Consumer) {}
 
+    async cancel(internalId: string): Promise<void> {
+        await this.consumer.acknowledgeId(
+            Pulsar.MessageId.deserialize(Buffer.from(internalId)),
+        )
+    }
+
     async close(): Promise<void> {
         await this.consumer.close()
     }
@@ -70,8 +77,8 @@ export class PulsarConsumer implements Consumer {
 export class PulsarQueue extends Queue {
     private client: Pulsar.Client
 
-    constructor(config: QueueConfig) {
-        super(config)
+    constructor(config: QueueConfig, repo?: Repository) {
+        super(config, repo)
 
         this.client = new Pulsar.Client({
             serviceUrl: config.url,
@@ -101,10 +108,13 @@ export class PulsarQueue extends Queue {
                 )
 
                 try {
-                    await callback(job)
+                    const canceled = await this.repo?.isCanceled(payload.id)
+
+                    if (!canceled) await callback(job)
+
                     await consumer.acknowledge(msg)
 
-                    if (job.rate && !job.isStopped) {
+                    if (!canceled && job.rate && !job.isStopped) {
                         const producer = (await this.getProducer(
                             jobName,
                         )) as PulsarProducer

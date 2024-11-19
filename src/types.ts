@@ -1,8 +1,10 @@
 import { getName, kebabCase } from './utils'
 import { QueueConfig, JobContext } from './queue/queue.queue'
+import { Repository } from './repository/repository.repository'
 
 export interface Config {
     queue?: Partial<QueueConfig>
+    repository?: Repository
 }
 
 export interface ScheduleInfo {

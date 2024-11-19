@@ -11,6 +11,6 @@ export interface JobScheduler {
         jobName: string,
         details: JobDetails<Params>,
     ): Promise<string>
-    cancel(id: string): Promise<boolean>
+    cancel(id: string): Promise<void>
     destroy(): Promise<void>
 }

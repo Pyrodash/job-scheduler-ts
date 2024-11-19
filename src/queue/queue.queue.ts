@@ -1,3 +1,4 @@
+import { Repository } from '../repository/repository.repository'
 import { JobDetails } from '../types'
 import { EventEmitter } from '../utils/events'
 
@@ -22,6 +23,7 @@ export interface Producer {
 }
 
 export interface Consumer {
+    cancel?(internalId: string): Promise<void>
     close(): Promise<void>
 }
 
@@ -48,7 +50,10 @@ export abstract class Queue extends EventEmitter {
 
     private cleanupTimer: NodeJS.Timeout
 
-    constructor(protected config: QueueConfig) {
+    constructor(
+        protected config: QueueConfig,
+        protected repo?: Repository,
+    ) {
         super()
 
         this.startCleanupJob()
@@ -136,7 +141,12 @@ export abstract class Queue extends EventEmitter {
         return await producer.schedule(details)
     }
 
-    // public remove(id: QueuedJob['id']): Promise<boolean> {}
+    public async remove(id: string): Promise<void> {
+        if (!this.repo)
+            throw new Error('Cannot remove jobs without a repository')
+
+        await this.repo.cancel(id)
+    }
 
     // Consumer API
 

@@ -27,7 +27,11 @@ export class DefaultJobScheduler extends EventEmitter implements JobScheduler {
 
         this.handleError = this.handleError.bind(this)
 
-        this.queue = new PulsarQueue(this.config.queue as QueueConfig)
+        this.queue = new PulsarQueue(
+            this.config.queue as QueueConfig,
+            this.config.repository,
+        )
+
         this.queue.on('error', this.handleError) // redirect errors
     }
 
@@ -67,8 +71,8 @@ export class DefaultJobScheduler extends EventEmitter implements JobScheduler {
         }
     }
 
-    public async cancel(id: string): Promise<boolean> {
-        return false
+    public cancel(id: string): Promise<void> {
+        return this.queue.remove(id)
     }
 
     public async destroy(): Promise<void> {
