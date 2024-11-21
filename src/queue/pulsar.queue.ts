@@ -14,10 +14,8 @@ import { JobDetails, JobPayload } from '../types'
 class PulsarJob<Params> extends JobContext<Params> {
     public isStopped = false
 
-    public stop(): Promise<void> {
+    public async stop(): Promise<void> {
         this.isStopped = true
-
-        return Promise.resolve()
     }
 }
 

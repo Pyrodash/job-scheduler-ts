@@ -17,14 +17,10 @@ export const DEFAULT_CONFIG: RedisConfig = {
 }
 
 export class RedisJob<Params> extends JobContext<Params> {
-    constructor(private job: Bull.Job<JobPayload<Params>>) {
-        const payload = job.data
-
-        super(String(job.id), job.queue.name, payload.rate, payload.params)
-    }
+    public isStopped = false
 
     public async stop(): Promise<void> {
-        await this.job.queue.removeJobs(this.id)
+        this.isStopped = true
     }
 }
 
@@ -81,29 +77,46 @@ export class RedisScheduler
     }
 
     private createProcessor(topic: string) {
-        return async (job: Bull.Job) => {
-            const context = new RedisJob(job)
-            const handlers = this.handlers.get(topic)
+        return (
+            job: Bull.Job<JobPayload<unknown>>,
+            done: Bull.DoneCallback,
+        ) => {
+            const context = new RedisJob(
+                String(job.id),
+                job.queue.name,
+                job.data.rate,
+                job.data.params,
+            )
 
+            const handlers = this.handlers.get(topic)
             const promises = []
 
             for (const handler of handlers) {
                 promises.push(handler(context))
             }
 
-            await Promise.all(promises)
-            await job.queue.removeJobs(context.id)
+            Promise.all(promises)
+                .then(async () => {
+                    done()
 
-            if (context.rate) {
-                await this.add(topic, {
-                    id: context.id,
-                    params: context.params,
-                    schedule: {
-                        deliverAt: Date.now() + context.rate,
-                        rate: context.rate,
-                    },
+                    await job.queue.removeJobs(context.id)
+
+                    if (context.rate && !context.isStopped) {
+                        await this.add(topic, {
+                            id: context.id,
+                            params: context.params,
+                            schedule: {
+                                deliverAt: Date.now() + context.rate,
+                                rate: context.rate,
+                            },
+                        })
+                    }
                 })
-            }
+                .catch((err) => {
+                    this.emit('error', err)
+
+                    done(err)
+                })
         }
     }
 

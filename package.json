@@ -1,6 +1,6 @@
 {
   "name": "@pyrodash/job-scheduler",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "A distributed job scheduler for node.js",
   "main": "dist/index.js",
   "scripts": {
