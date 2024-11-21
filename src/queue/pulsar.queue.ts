@@ -9,13 +9,7 @@ import {
     JobContext,
     CancelableConsumer,
 } from './queue.queue'
-import { JobDetails } from '../types'
-
-interface JobPayload<Params> {
-    id: string
-    params: Params
-    rate: number
-}
+import { JobDetails, JobPayload } from '../types'
 
 class PulsarJob<Params> extends JobContext<Params> {
     public isStopped = false
@@ -66,10 +60,15 @@ export class PulsarConsumer implements CancelableConsumer {
     }
 }
 
+export interface PulsarQueueConfig extends QueueConfig {
+    url: string
+    topic: string
+}
+
 export class PulsarQueue extends Queue {
     private client: Pulsar.Client
 
-    constructor(config: QueueConfig) {
+    constructor(protected config: PulsarQueueConfig) {
         super(config)
 
         this.client = new Pulsar.Client({
@@ -147,7 +146,7 @@ export class PulsarQueue extends Queue {
     }
 
     protected async handleJob<Params>(
-        job: PulsarJob<Params>,
+        job: JobContext<Params>,
         handler: JobHandler<Params>,
         next: () => Promise<void>,
     ): Promise<void> {

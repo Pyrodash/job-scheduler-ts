@@ -46,8 +46,6 @@ const isCancelableConsumer = (
 }
 
 export interface QueueConfig {
-    url: string
-    topic: string
     producerTimeoutMs: number // How long to keep unused producers
     cleanupIntervalMs: number // How often to run the cleanup job
 }
@@ -56,10 +54,16 @@ export abstract class Queue extends EventEmitter {
     private producers: Map<string, ProducerRecord> = new Map()
     private consumers: Map<string, ConsumerRecord> = new Map()
 
+    private producerTimeoutMs: number
+    private cleanupIntervalMs: number
+
     private cleanupTimer: NodeJS.Timeout
 
-    constructor(protected config: QueueConfig) {
+    constructor({ cleanupIntervalMs, producerTimeoutMs }: QueueConfig) {
         super()
+
+        this.cleanupIntervalMs = cleanupIntervalMs
+        this.producerTimeoutMs = producerTimeoutMs
 
         this.startCleanupJob()
     }
@@ -71,10 +75,10 @@ export abstract class Queue extends EventEmitter {
     ): Promise<Consumer>
 
     private startCleanupJob(): void {
-        if (this.config.cleanupIntervalMs > 0) {
+        if (this.cleanupIntervalMs > 0) {
             this.cleanupTimer = setTimeout(
                 () => this.cleanup(),
-                this.config.cleanupIntervalMs,
+                this.cleanupIntervalMs,
             )
         }
     }
@@ -97,7 +101,7 @@ export abstract class Queue extends EventEmitter {
 
         // Identify producers to remove
         for (const [topic, { lastUsed }] of this.producers.entries()) {
-            if (now - lastUsed > this.config.producerTimeoutMs) {
+            if (now - lastUsed > this.producerTimeoutMs) {
                 producersToRemove.push(topic)
             }
         }

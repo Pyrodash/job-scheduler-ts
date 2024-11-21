@@ -1,17 +1,18 @@
 # @pyrodash/job-scheduler
 
-A distributed job scheduler for Node.js based on Apache Pulsar.
+A distributed job scheduler for Node.js. There are currently two drivers being wrapped by this library, one for Apache Pulsar and the other for Redis.
 
-## Setup
+## Apache Pulsar
+### Setup
 1. [Install Apache Pulsar](https://pulsar.apache.org/docs/4.0.x/getting-started-home/)
 2. Install the library
 ```sh
-npm install @pyrodash/job-scheduler
+npm install @pyrodash/job-scheduler pulsar-client
 ```
 
-## Usage
+### Usage
 ```ts
-import { JobScheduler, JobContext, Job } from '@pyrodash/job-scheduler'
+import { PulsarScheduler, JobContext, Job } from '@pyrodash/job-scheduler'
 
 interface MyParams {
     name: string
@@ -23,13 +24,11 @@ class MyJob extends Job<MyParams> {
     }
 }
 
-const scheduler = new JobScheduler({
-    queue: {
-        url: 'pulsar://localhost:6650',
-        topic: 'persistent://public/default',
-        producerTimeoutMs: 0, // How long before inactive producers are terminated
-        cleanupIntervalMs: 0, // How often producer garbage collection should run (0 for never)
-    },
+const scheduler = new PulsarScheduler({
+    url: 'pulsar://localhost:6650',
+    topic: 'persistent://public/default',
+    producerTimeoutMs: 0, // How long before inactive producers are terminated
+    cleanupIntervalMs: 0, // How often producer garbage collection should run (0 for never)
 })
 
 // Registering a worker
@@ -43,12 +42,14 @@ await scheduler.handle('my-job', (ctx: JobContext<MyParams>) => {
 // Scheduling a job
 await scheduler.schedule(
     MyJob
+        .withId('hello-world')
         .withParams({ name: 'Pyrodash' })
         .at(Date.now() + 5000) // 5 seconds from now
         .recurring(1000), // every second
 )
 // This syntax is also supported
 await scheduler.schedule('my-job', {
+    id: 'hello-world',
     params: { name: 'Pyrodash' },
     schedule: {
         deliverAt: Date.now() + 5000,
@@ -57,34 +58,23 @@ await scheduler.schedule('my-job', {
 })
 ```
 
-## Cancelation
-Job cancelation is supported, but you need to implement the Repository interface and pass it to the config.
-```ts
-interface Repository {
-    // This should set recurring to true
-    cancel(id: string): Promise<void>
-
-    // This should delete your DB entry if the item is non-recurring or canceled
-    // Example query: DELETE FROM Job WHERE ID = 'id' AND (Recurring = false or Canceled = true) RETURNING Canceled;
-    // You can also just use Redis Sets
-    isCanceled(id: string): Promise<boolean>
-}
+## Redis
+### Setup
+1. [Install Redis](https://redis.io/docs/latest/operate/oss_and_stack/install/install-redis/)
+2. Install the library
+```sh
+npm install @pyrodash/job-scheduler bull ioredis
 ```
+
+### Usage
 ```ts
-const myRepo = new MyRepository()
-const scheduler = new JobScheduler({
-    queue: { ... },
-    repository: myRepo,
+import { RedisScheduler } from '@pyrodash/job-scheduler'
+
+const scheduler = new RedisScheduler({
+    ... ioredis config
 })
 
-const jobId = await scheduler.schedule('my-job', {
-    params: { name: 'Pyrodash' },
-    schedule: {
-        deliverAt: Date.now() + 5000,
-        rate: 1000,
-    },
-})
-
-await myRepo.add({ jobId, recurring: true, canceled: false })
-await scheduler.cancel(jobId)
+// Usage is identical to the Pulsar scheduler
+// The Redis Scheduler supports cancelation out of the box
+await scheduler.cancel('my-job', 'job id')
 ```

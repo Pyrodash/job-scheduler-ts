@@ -1,6 +1,6 @@
 {
   "name": "@pyrodash/job-scheduler",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "A distributed job scheduler for node.js",
   "main": "dist/index.js",
   "scripts": {
@@ -33,7 +33,11 @@
     "typescript": "^5.4.2"
   },
   "dependencies": {
-    "msgpackr": "^1.11.2",
+    "msgpackr": "^1.11.2"
+  },
+  "peerDependencies": {
+    "bull": "^4.16.4",
+    "ioredis": "^5.4.1",
     "pulsar-client": "^1.12.0"
   }
 }

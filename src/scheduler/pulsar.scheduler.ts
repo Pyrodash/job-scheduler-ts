@@ -1,24 +1,29 @@
-import { PulsarQueue } from '../queue/pulsar.queue'
-import { JobScheduler } from './scheduler.scheduler'
-import { Queue, QueueConfig, JobHandler } from '../queue/queue.queue'
-import { Config, getJobName, Job, JobBuilder, JobDetails } from '../types'
+import { PulsarQueue, PulsarQueueConfig } from '../queue/pulsar.queue'
+import {
+    JobScheduler,
+    INVALID_PARAMS_ERROR,
+    MISSING_PARAMS_ERROR,
+} from './scheduler.scheduler'
+import { JobHandler } from '../queue/queue.queue'
+import { getJobName, Job, JobBuilder, JobDetails } from '../types'
 import { EventEmitter } from '../utils/events'
 
-export const DEFAULT_CONFIG: Config = {
+export interface PulsarConfig extends PulsarQueueConfig {
+    queue?: PulsarQueue
+}
+
+export const DEFAULT_CONFIG: PulsarConfig = {
     url: 'pulsar://localhost:6650',
     topic: 'persistent://public/default',
     producerTimeoutMs: 0,
     cleanupIntervalMs: 0,
 }
 
-export const MISSING_PARAMS_ERROR = new Error('Missing job parameters')
-export const INVALID_PARAMS_ERROR = new Error('Invalid parameters')
+export class PulsarScheduler extends EventEmitter implements JobScheduler {
+    protected config: PulsarConfig
+    protected queue: PulsarQueue
 
-export class DefaultJobScheduler extends EventEmitter implements JobScheduler {
-    private config: Config
-    private queue: Queue
-
-    constructor(config: Partial<Config> = {}) {
+    constructor(config: Partial<PulsarConfig> = {}) {
         super()
 
         this.config = {
@@ -29,12 +34,16 @@ export class DefaultJobScheduler extends EventEmitter implements JobScheduler {
         this.handleError = this.handleError.bind(this)
 
         if (!config.queue) {
-            this.queue = new PulsarQueue(this.config as QueueConfig)
+            this.queue = this.createQueue()
         } else {
             this.queue = config.queue
         }
 
         this.queue.on('error', this.handleError) // redirect errors
+    }
+
+    protected createQueue(): PulsarQueue {
+        return new PulsarQueue(this.config)
     }
 
     private handleError(err: Error) {
@@ -71,11 +80,10 @@ export class DefaultJobScheduler extends EventEmitter implements JobScheduler {
 
             if (!details.id || !details.schedule) throw MISSING_PARAMS_ERROR
             if (!details.schedule.deliverAt) {
+                details.schedule.deliverAt = Date.now()
+
                 if (details.schedule.rate) {
-                    details.schedule.deliverAt =
-                        Date.now() + details.schedule.rate
-                } else {
-                    details.schedule.deliverAt = Date.now()
+                    details.schedule.deliverAt += details.schedule.rate
                 }
             }
 

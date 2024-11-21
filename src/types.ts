@@ -1,9 +1,5 @@
 import { getName, kebabCase } from './utils'
-import { QueueConfig, JobContext, Queue } from './queue/queue.queue'
-
-export interface Config extends QueueConfig {
-    queue?: Queue
-}
+import { JobContext } from './queue/queue.queue'
 
 export interface ScheduleInfo {
     rate?: number
@@ -14,6 +10,12 @@ export interface JobDetails<Params> {
     id: string
     params: Params
     schedule: ScheduleInfo
+}
+
+export interface JobPayload<Params> {
+    id: string
+    params: Params
+    rate: number
 }
 
 export class JobBuilder<Params> {
