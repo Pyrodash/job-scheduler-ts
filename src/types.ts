@@ -1,10 +1,8 @@
 import { getName, kebabCase } from './utils'
-import { QueueConfig, JobContext } from './queue/queue.queue'
-import { Repository } from './repository/repository.repository'
+import { QueueConfig, JobContext, Queue } from './queue/queue.queue'
 
-export interface Config {
-    queue?: Partial<QueueConfig>
-    repository?: Repository
+export interface Config extends QueueConfig {
+    queue?: Queue
 }
 
 export interface ScheduleInfo {
@@ -13,12 +11,14 @@ export interface ScheduleInfo {
 }
 
 export interface JobDetails<Params> {
+    id: string
     params: Params
     schedule: ScheduleInfo
 }
 
 export class JobBuilder<Params> {
     private _details: JobDetails<Params> = {
+        id: null,
         params: null,
         schedule: {
             deliverAt: 0,
@@ -31,6 +31,12 @@ export class JobBuilder<Params> {
     }
 
     constructor(public readonly jobName: string) {}
+
+    public withId(id: string): this {
+        this._details.id = id
+
+        return this
+    }
 
     public withParams(params: Params): this {
         this._details.params = params
@@ -52,6 +58,10 @@ export class JobBuilder<Params> {
 }
 
 export abstract class Job<Params> {
+    static withId<Params>(id: string): JobBuilder<Params> {
+        return new JobBuilder<Params>(getJobName(this)).withId(id)
+    }
+
     static withParams<Params>(params: Params): JobBuilder<Params> {
         return new JobBuilder<Params>(getJobName(this)).withParams(params)
     }

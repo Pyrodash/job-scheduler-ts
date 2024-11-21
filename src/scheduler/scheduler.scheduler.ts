@@ -6,11 +6,10 @@ export interface JobScheduler {
     on(event: EventType, handler: EventHandler): void
     register<Params>(job: Job<Params>): Promise<void>
     handle<Params>(jobName: string, handler: JobHandler<Params>): Promise<void>
-    schedule<Params>(job: JobBuilder<Params>): Promise<string>
+    schedule<Params>(job: JobBuilder<Params>): Promise<void>
     schedule<Params>(
         jobName: string,
         details: JobDetails<Params>,
-    ): Promise<string>
-    cancel(id: string): Promise<void>
+    ): Promise<void>
     destroy(): Promise<void>
 }

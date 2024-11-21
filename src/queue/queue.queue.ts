@@ -1,4 +1,3 @@
-import { Repository } from '../repository/repository.repository'
 import { JobDetails } from '../types'
 import { EventEmitter } from '../utils/events'
 
@@ -23,8 +22,11 @@ export interface Producer {
 }
 
 export interface Consumer {
-    cancel?(internalId: string): Promise<void>
     close(): Promise<void>
+}
+
+export interface CancelableConsumer extends Consumer {
+    cancel(internalId: string): Promise<void>
 }
 
 interface ProducerRecord {
@@ -35,6 +37,12 @@ interface ProducerRecord {
 interface ConsumerRecord {
     consumer: Consumer
     handlers: Set<JobHandler>
+}
+
+const isCancelableConsumer = (
+    consumer: Consumer | CancelableConsumer,
+): consumer is CancelableConsumer => {
+    return 'cancel' in consumer
 }
 
 export interface QueueConfig {
@@ -50,10 +58,7 @@ export abstract class Queue extends EventEmitter {
 
     private cleanupTimer: NodeJS.Timeout
 
-    constructor(
-        protected config: QueueConfig,
-        protected repo?: Repository,
-    ) {
+    constructor(protected config: QueueConfig) {
         super()
 
         this.startCleanupJob()
@@ -135,17 +140,20 @@ export abstract class Queue extends EventEmitter {
     public async add<Params>(
         jobName: string,
         details: JobDetails<Params>,
-    ): Promise<string> {
+    ): Promise<void> {
         const producer = await this.getProducer(jobName)
 
-        return await producer.schedule(details)
+        await producer.schedule(details)
     }
 
-    public async remove(id: string): Promise<void> {
-        if (!this.repo)
-            throw new Error('Cannot remove jobs without a repository')
+    public async remove(jobName: string, internalId: string) {
+        const { consumer } = await this.getConsumer(jobName)
 
-        await this.repo.cancel(id)
+        if (isCancelableConsumer(consumer)) {
+            await consumer.cancel(internalId)
+        } else {
+            throw new Error('Cancelation is not supported by this queue driver')
+        }
     }
 
     // Consumer API

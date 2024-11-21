@@ -5,19 +5,20 @@ import { Config, getJobName, Job, JobBuilder, JobDetails } from '../types'
 import { EventEmitter } from '../utils/events'
 
 export const DEFAULT_CONFIG: Config = {
-    queue: {
-        url: 'pulsar://localhost:6650',
-        topic: 'persistent://public/default',
-        producerTimeoutMs: 0,
-        cleanupIntervalMs: 0,
-    },
+    url: 'pulsar://localhost:6650',
+    topic: 'persistent://public/default',
+    producerTimeoutMs: 0,
+    cleanupIntervalMs: 0,
 }
+
+export const MISSING_PARAMS_ERROR = new Error('Missing job parameters')
+export const INVALID_PARAMS_ERROR = new Error('Invalid parameters')
 
 export class DefaultJobScheduler extends EventEmitter implements JobScheduler {
     private config: Config
     private queue: Queue
 
-    constructor(config: Config = {}) {
+    constructor(config: Partial<Config> = {}) {
         super()
 
         this.config = {
@@ -27,10 +28,11 @@ export class DefaultJobScheduler extends EventEmitter implements JobScheduler {
 
         this.handleError = this.handleError.bind(this)
 
-        this.queue = new PulsarQueue(
-            this.config.queue as QueueConfig,
-            this.config.repository,
-        )
+        if (!config.queue) {
+            this.queue = new PulsarQueue(this.config as QueueConfig)
+        } else {
+            this.queue = config.queue
+        }
 
         this.queue.on('error', this.handleError) // redirect errors
     }
@@ -53,26 +55,34 @@ export class DefaultJobScheduler extends EventEmitter implements JobScheduler {
         return this.queue.addHandler(jobName, handler)
     }
 
-    schedule<Params>(job: JobBuilder<Params>): Promise<string>
+    schedule<Params>(job: JobBuilder<Params>): Promise<void>
     schedule<Params>(
         jobName: string,
         details: JobDetails<Params>,
-    ): Promise<string>
+    ): Promise<void>
     schedule<Params>(
         job: JobBuilder<Params> | string,
         details?: JobDetails<Params>,
-    ): Promise<string> {
+    ): Promise<void> {
         if (typeof job === 'string' && details) {
             return this.queue.add(job, details)
         } else if (job instanceof JobBuilder) {
-            return this.queue.add(job.jobName, job.details)
-        } else {
-            throw new Error('Invalid parameters')
-        }
-    }
+            const { details } = job
 
-    public cancel(id: string): Promise<void> {
-        return this.queue.remove(id)
+            if (!details.id || !details.schedule) throw MISSING_PARAMS_ERROR
+            if (!details.schedule.deliverAt) {
+                if (details.schedule.rate) {
+                    details.schedule.deliverAt =
+                        Date.now() + details.schedule.rate
+                } else {
+                    details.schedule.deliverAt = Date.now()
+                }
+            }
+
+            return this.queue.add(job.jobName, details)
+        } else {
+            throw INVALID_PARAMS_ERROR
+        }
     }
 
     public async destroy(): Promise<void> {
